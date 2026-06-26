@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MeteoPro Premium - Estación IoT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+    <style>
+        body {
+            background: radial-gradient(circle at top right, #1e293b, #0f172a);
+        }
+        /* Cristalografía (Glassmorphism avanzado) */
+        .glass-card {
+            background: rgba(30, 41, 59, 0.45);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            box-shadow: 0 12px 40px -10px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.05);
+        }
+        .sun-arc-path {
+            width: 120px;
+            height: 60px;
+            border: 2px dashed rgba(234, 179, 8, 0.25);
+            border-bottom: none;
+            border-radius: 120px 120px 0 0;
+            position: relative;
+        }
+    </style>
+</head>
+<body class="text-slate-200 min-h-screen font-sans flex items-center justify-center p-0 sm:p-6 antialiased">
+
+    <div class="w-full max-w-md bg-slate-950/80 sm:rounded-[45px] shadow-2xl min-h-screen sm:min-h-[880px] p-6 flex flex-col justify-between border border-slate-900 relative">
+        
+        <div class="space-y-5">
+            <header class="flex justify-between items-center bg-slate-900/40 p-3 rounded-2xl border border-slate-800/50">
+                <div class="flex items-center gap-2">
+                    <div class="h-2 w-2 rounded-full bg-amber-500 animate-pulse" id="status-indicator"></div>
+                    <div>
+                        <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-1">
+                            Meteo<span class="text-slate-400 font-light">Pro</span>
+                        </h1>
+                        <p class="text-[10px] text-slate-400 font-medium tracking-wide flex items-center gap-1">
+                            <i class="fa-solid fa-location-dot text-indigo-400"></i> Cañuelas
+                        </p>
+                    </div>
+                </div>
+                <div class="text-right text-[11px] text-slate-400 leading-tight">
+                    <p id="fecha-txt" class="font-medium">--.--.----</p>
+                    <p id="hora-txt" class="text-slate-300 font-semibold text-xs">--:--</p>
+                </div>
+            </header>
+
+            <section class="space-y-2">
+                <div class="glass-card rounded-[28px] p-5 relative overflow-hidden">
+                    <div class="absolute -top-6 -left-6 text-slate-800/10 text-8xl pointer-events-none">
+                        <i class="fa-solid fa-cloud-sun"></i>
+                    </div>
+                    
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <span class="text-[10px] uppercase font-bold tracking-widest text-slate-400">Estado Actual</span>
+                            <div class="flex items-center gap-2 mt-2">
+                                <i id="icono-clima-principal" class="fa-solid fa-cloud-sun text-4xl text-amber-400 drop-shadow"></i>
+                                <span class="text-xs text-slate-300 font-medium" id="desc-clima">Esperando datos...</span>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="inline-flex">
+                                <span class="text-6xl font-light text-white tracking-tighter" id="v-temp">--.-</span>
+                                <span class="text-lg font-light text-slate-400 ml-0.5 mt-1">°C</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2 mt-6 pt-4 border-t border-slate-800/60 text-left">
+                        <div>
+                            <p class="text-[9px] text-slate-500 uppercase font-bold tracking-wider">Sensación</p>
+                            <p class="text-xs font-semibold text-white mt-0.5" id="v-sensa">--.- °C</p>
+                        </div>
+                        <div>
+                            <p class="text-[9px] text-slate-500 uppercase font-bold tracking-wider">Humedad</p>
+                            <p class="text-xs font-semibold text-white mt-0.5" id="v-hume">--%</p>
+                        </div>
+                        <div>
+                            <p class="text-[9px] text-slate-500 uppercase font-bold tracking-wider">Visibilidad</p>
+                            <p class="text-xs font-semibold text-white mt-0.5" id="v-visi">-- km</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="grid grid-cols-12 gap-3">
+                <div class="col-span-7 glass-card rounded-2xl p-3.5 flex flex-col justify-between h-[125px]">
+                    <div class="flex justify-between items-center w-full">
+                        <div class="space-y-2">
+                            <div class="flex items-center gap-1.5 text-xs">
+                                <i class="fa-solid fa-circle-arrow-up text-amber-400 text-[10px]"></i>
+                                <div>
+                                    <p class="text-[8px] text-slate-500 font-bold uppercase">Amanecer</p>
+                                    <p class="font-medium text-white text-[11px]" id="v-amanecer">--:--</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1.5 text-xs">
+                                <i class="fa-solid fa-circle-arrow-down text-indigo-400 text-[10px]"></i>
+                                <div>
+                                    <p class="text-[8px] text-slate-500 font-bold uppercase">Atardecer</p>
+                                    <p class="font-medium text-white text-[11px]" id="v-atardecer">--:--</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="sun-arc-path mt-2">
+                            <i class="fa-solid fa-sun text-amber-400 text-[11px] absolute top-[22px] left-[52px] drop-shadow-[0_0_4px_rgba(234,179,8,0.5)]"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-span-5 glass-card rounded-2xl p-3.5 flex flex-col justify-between h-[125px]">
+                    <div>
+                        <span class="text-[8px] uppercase font-bold tracking-wider text-slate-500 block">Eólica</span>
+                        <p class="text-xs font-bold text-white mt-1 flex items-baseline gap-0.5">
+                            <span id="v-viento-vel" class="text-base font-extrabold">--</span><span class="text-[9px] font-normal text-slate-400">km/h</span>
+                        </p>
+                        <p class="text-[9px] text-slate-400 flex items-center gap-1 mt-0.5">
+                            Dir: <span class="text-indigo-400 font-extrabold" id="v-viento-dir">--</span>
+                        </p>
+                    </div>
+                    <div class="pt-1.5 border-t border-slate-800/60 text-[9px]">
+                        <p class="text-slate-500">Ráfagas máx:</p>
+                        <p class="font-semibold text-teal-400" id="v-rafagas">-- km/h</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="alert-zone">
+                <div id="alert-banner" class="bg-slate-900/40 border border-slate-800 rounded-2xl p-3.5 flex items-start gap-3 transition-all duration-300">
+                    <div class="p-2 bg-slate-800 rounded-xl text-slate-400 flex items-center justify-center" id="alert-icon-bg">
+                        <i class="fa-solid fa-bell text-sm" id="alert-icon"></i>
+                    </div>
+                    <div class="space-y-0.5">
+                        <h4 class="text-[10px] uppercase font-extrabold tracking-wider text-slate-400" id="alert-title">Sistemas de Monitorización</h4>
+                        <p class="text-[10px] text-slate-300 leading-snug" id="alert-body">Escaneando parámetros atmosféricos locales.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="space-y-2">
+                <span class="text-[10px] uppercase font-bold tracking-widest text-slate-400 px-1 block">Calendario Semanal / Pronóstico de Riego</span>
+                
+                <div class="grid grid-cols-5 gap-2" id="semana-grid">
+                    <div class="animate-pulse bg-slate-900/50 h-[125px] rounded-2xl border border-slate-900"></div>
+                    <div class="animate-pulse bg-slate-900/50 h-[125px] rounded-2xl border border-slate-900"></div>
+                    <div class="animate-pulse bg-slate-900/50 h-[125px] rounded-2xl border border-slate-900"></div>
+                    <div class="animate-pulse bg-slate-900/50 h-[125px] rounded-2xl border border-slate-900"></div>
+                    <div class="animate-pulse bg-slate-900/50 h-[125px] rounded-2xl border border-slate-900"></div>
+                </div>
+            </section>
+        </div>
+
+        <footer class="glass-card rounded-2xl p-3 flex justify-around items-center text-slate-500 mt-5">
+            <button class="text-amber-400 text-base transition-transform active:scale-90"><i class="fa-solid fa-house"></i></button>
+            <button class="hover:text-slate-300 transition-transform active:scale-90"><i class="fa-solid fa-chart-line"></i></button>
+            <button class="hover:text-slate-300 transition-transform active:scale-90"><i class="fa-solid fa-circle-exclamation"></i></button>
+            <button class="hover:text-slate-300 transition-transform active:scale-90"><i class="fa-solid fa-sliders"></i></button>
+        </footer>
+
+    </div>
+
+    <script>
+        // CORREGIDO: Configuración de conexión nativa WebSockets (WSS) para Navegadores
+        const broker = 'wss://900127308e3940409db912dc9402a33e.s1.eu.hivemq.cloud:8884/mqtt'; 
+        const options = {
+            username: 'Estacion_Meteo',
+            password: 'Nico159+++',
+            clientId: 'meteopro_premium_' + Math.random().toString(16).substr(2, 8),
+            protocol: 'wss',
+            default: '/mqtt'
+        };
+
+        const client = mqtt.connect(broker, options);
+        const ind = document.getElementById('status-indicator');
+
+        client.on('connect', () => {
+            ind.className = "h-2 w-2 rounded-full bg-emerald-400"; // En línea (Verde)
+            client.subscribe('estacion/clima');
+            console.log("¡Conectado exitosamente a HiveMQ vía WebSockets!");
+        });
+
+        client.on('close', () => {
+            ind.className = "h-2 w-2 rounded-full bg-rose-500 animate-pulse"; // Fuera de línea (Rojo)
+        });
+
+        client.on('message', (topic, message) => {
+            try {
+                const payload = JSON.parse(message.toString());
+                console.log("Datos recibidos del ESP32:", payload);
+                renderizarDashboard(payload);
+            } catch (err) {
+                console.error("Error parseando transmisión JSON:", err);
+            }
+        });
+
+        function parsearDireccionViento(grados) {
+            const rosaVientos = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
+            const quadrant = Math.round(((grados %= 360) < 0 ? grados + 360 : grados) / 45) % 8;
+            return rosaVientos[quadrant];
+        }
+
+        // CORREGIDO: Mapeo adaptado al JSON optimizado de 205 bytes enviado por el ESP32
+        function renderizarDashboard(data) {
+            // Sincronizar reloj de cabecera con la estampa de actualización de la PC/Celular
+            const timestamp = new Date();
+            document.getElementById('fecha-txt').innerText = `${timestamp.getDate()}.${timestamp.getMonth()+1}.${timestamp.getFullYear()}`;
+            document.getElementById('hora-txt').innerText = timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+            // Inyección en Bloque 1 (Estado Actual)
+            document.getElementById('v-temp').innerText = Number(data.temp).toFixed(1);
+            document.getElementById('v-sensa').innerText = `${Number(data.sensacion).toFixed(1)} °C`;
+            document.getElementById('v-hume').innerText = `${data.humedad}%`;
+            
+            const visKm = (data.visibilidad / 1000).toFixed(0);
+            document.getElementById('v-visi').innerText = `${visKm} km`;
+            document.getElementById('desc-clima').innerText = data.humedad > 85 ? "Humedad Alta" : "Despejado";
+
+            // Inyección en Bloque 2 (Métricas de Sol y Viento)
+            document.getElementById('v-amanecer').innerText = data.salida_sol.split('T')[1];
+            document.getElementById('v-atardecer').innerText = data.puesta_sol.split('T')[1];
+            document.getElementById('v-viento-vel').innerText = Math.round(data.viento_vel);
+            document.getElementById('v-viento-dir').innerText = parsearDireccionViento(data.viento_dir);
+            document.getElementById('v-rafagas').innerText = `${Math.round(data.viento_raf)} km/h`;
+
+            // --- GESTIÓN DE ALERTAS DINÁMICAS ---
+            const banner = document.getElementById('alert-banner');
+            const aIconBg = document.getElementById('alert-icon-bg');
+            const aIcon = document.getElementById('alert-icon');
+            const aTitle = document.getElementById('alert-title');
+            const aBody = document.getElementById('alert-body');
+
+            if (data.viento_raf > 45 || data.prob_lluvia > 75) {
+                banner.className = "bg-rose-500/15 border border-rose-500/30 rounded-2xl p-3.5 flex items-start gap-3 animate-pulse";
+                aIconBg.className = "p-2 bg-rose-500/20 rounded-xl text-rose-400 flex items-center justify-center";
+                aIcon.className = "fa-solid fa-triangle-exclamation text-sm";
+                aTitle.className = "text-[10px] uppercase font-extrabold tracking-wider text-rose-400";
+                aTitle.innerText = "ALERTA ROJA METEOROLÓGICA";
+                aBody.innerText = "Vientos severos o alta probabilidad de tormenta. Tomar recaudos.";
+            } else {
+                banner.className = "bg-slate-900/40 border border-slate-800/80 rounded-2xl p-3.5 flex items-start gap-3";
+                aIconBg.className = "p-2 bg-slate-800 rounded-xl text-emerald-400 flex items-center justify-center";
+                aIcon.className = "fa-solid fa-circle-check text-sm";
+                aTitle.className = "text-[10px] uppercase font-extrabold tracking-wider text-slate-400";
+                aTitle.innerText = "Condiciones Normales";
+                aBody.innerText = "Sin anomalías ni alertas de riesgo activas en la zona.";
+            }
+
+            // --- CONSTRUCCIÓN DEL CARD ÚNICO DE HOY PARA EL RECUADRO SEMANAL ---
+            // Como el ESP32 ahora envía los datos consolidados del día actual para optimizar, 
+            // renderizamos el slot de hoy y placeholders estéticos para simular la app completa.
+            const gridSemana = document.getElementById('semana-grid');
+            gridSemana.innerHTML = ''; 
+            const nombresDias = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
+            
+            const pLluvia = data.prob_lluvia;
+            let riegoLabel = "Óptimo", riegoColor = "bg-emerald-500", iconStyle = "fa-sun text-amber-400";
+            if (pLluvia > 20 && pLluvia <= 60) {
+                riegoLabel = "Evitar"; riegoColor = "bg-amber-500"; iconStyle = "fa-cloud-sun text-slate-400";
+            } else if (pLluvia > 60) {
+                riegoLabel = "Evitar"; riegoColor = "bg-rose-500"; iconStyle = "fa-cloud-showers-heavy text-sky-400";
+            }
+
+            // Slot 1: El dato real enviado por el ESP32 (Hoy)
+            gridSemana.innerHTML += `
+                <div class="glass-card rounded-2xl p-2.5 flex flex-col items-center justify-between text-center border border-amber-500/50 ring-1 ring-amber-500/10">
+                    <div>
+                        <p class="text-[9px] font-extrabold text-amber-400 tracking-wider">${nombresDias[timestamp.getDay()]} <span class="opacity-60 font-normal ml-0.5">${timestamp.getDate()}</span></p>
+                        <i class="fa-solid ${iconStyle} text-base my-2.5 block drop-shadow-sm"></i>
+                        <p class="text-[8px] text-sky-400 font-semibold flex items-center justify-center gap-0.5">
+                            <i class="fa-solid fa-droplet text-[7px]"></i> ${pLluvia}%
+                        </p>
+                    </div>
+                    <div class="w-full mt-2">
+                        <div class="w-full bg-slate-950/60 h-[3px] rounded-full overflow-hidden">
+                            <div class="${riegoColor} h-full" style="width: 85%"></div>
+                        </div>
+                        <p class="text-[5px] uppercase tracking-tight text-slate-400 mt-1 font-bold">Riego: ${riegoLabel}</p>
+                    </div>
+                </div>
+            `;
+
+            // Slots 2 a 5: Placeholders limpios complementarios para el diseño
+            for (let i = 1; i < 5; i++) {
+                const proxDia = new Date();
+                proxDia.setDate(timestamp.getDate() + i);
+                gridSemana.innerHTML += `
+                    <div class="glass-card rounded-2xl p-2.5 flex flex-col items-center justify-between text-center border border-transparent opacity-40">
+                        <div>
+                            <p class="text-[9px] font-extrabold text-slate-400 tracking-wider">${nombresDias[proxDia.getDay()]} <span class="opacity-40 font-normal ml-0.5">${proxDia.getDate()}</span></p>
+                            <i class="fa-solid fa-sun text-amber-500/40 text-base my-2.5 block"></i>
+                            <p class="text-[8px] text-slate-500 font-semibold">- %</p>
+                        </div>
+                        <div class="w-full mt-2">
+                            <div class="w-full bg-slate-950/60 h-[3px] rounded-full"></div>
+                            <p class="text-[5px] uppercase tracking-tight text-slate-500 mt-1 font-bold">Riego: --</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>
