@@ -1,0 +1,127 @@
+#include <WiFi.h>
+#include <DNSServer.h>
+#include <WebServer.h>
+#include <WiFiManager.h>          
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include <PubSubClient.h>         
+
+// --- CONFIGURACIÓN COORDENADAS (Se pueden cambiar en el AP) ---
+char latitud[10] = "-34.61";
+char longitud[10] = "-58.38";
+
+// --- CONFIGURACIÓN MQTT (Adafruit IO) ---
+const char* mqtt_server = "io.adafruit.com"; 
+const int mqtt_port = 1883;
+const char* mqtt_user = "TU_USUARIO_ADAFRUIT";
+const char* mqtt_pass = "TU_AIO_KEY_ADAFRUIT";
+
+// Tópicos de Adafruit IO (Feeds)
+const char* topic_clima_actual = "TU_USUARIO_ADAFRUIT/feeds/clima-actual";
+const char* topic_calendario   = "TU_USUARIO_ADAFRUIT/feeds/calendario-semanal";
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+unsigned long ultimoEnvio = 0;
+const long intervalo = 900000; // 15 minutos
+
+void setup() {
+  Serial.begin(115200);
+
+  WiFiManager wm;
+  WiFiManagerParameter custom_latitud("lat", "Latitud", latitud, 10);
+  WiFiManagerParameter custom_longitud("lon", "Longitud", longitud, 10);
+  wm.addParameter(&custom_latitud);
+  wm.addParameter(&custom_longitud);
+
+  if (!wm.autoConnect("ESP32_Central_Meteo", "password123")) {
+    Serial.println("Fallo la conexión, reiniciando...");
+    delay(3000);
+    ESP.restart();
+  }
+
+  strcpy(latitud, custom_latitud.getValue());
+  strcpy(longitud, custom_longitud.getValue());
+  
+  client.setServer(mqtt_server, mqtt_port);
+}
+
+void reconectarMQTT() {
+  while (!client.connected()) {
+    Serial.print("Conectando a Adafruit IO...");
+    String clientId = "ESP32Client-" + String(random(0xffff), HEX);
+    if (client.connect(clientId.c_str(), mqtt_user, mqtt_pass)) {
+      Serial.println("¡Conectado!");
+    } else {
+      delay(5000);
+    }
+  }
+}
+
+void loop() {
+  if (!client.connected()) reconectarMQTT();
+  client.loop();
+
+  unsigned long ahora = millis();
+  if (ahora - ultimoEnvio >= intervalo || ultimoEnvio == 0) {
+    ultimoEnvio = ahora;
+
+    if (WiFi.status() == WL_CONNECTED) {
+      HTTPClient http;
+      
+      // URL Avanzada: Pide datos actuales + datos diarios (amanecer, atardecer, prob. lluvia, weathercode)
+      String url = "http://api.open-meteo.com/v1/forecast?latitude=" + String(latitud) + 
+                   "&longitude=" + String(longitud) + 
+                   "&current_weather=true&daily=sunrise,sunset,weathercode,precipitation_probability_max&timezone=auto";
+
+      http.begin(url);
+      int httpCode = http.GET();
+
+      if (httpCode > 0) {
+        String payload = http.getString();
+        
+        // Asignamos 4KB de memoria, ideal para el ESP32
+        DynamicJsonDocument doc(4096); 
+        deserializeJson(doc, payload);
+
+        // 1. Datos Actuales
+        float temp = doc["current_weather"]["temperature"];
+        float viento = doc["current_weather"]["windspeed"];
+        
+        // 2. Amanecer y Atardecer de hoy (Día 0)
+        String amanecer = doc["daily"]["sunrise"][0].as<String>();
+        String atardecer = doc["daily"]["sunset"][0].as<String>();
+
+        // Creamos un JSON compacto para enviar el "Estado Actual" por MQTT
+        StaticJsonDocument<300> jsonActual;
+        jsonActual["temp"] = temp;
+        jsonActual["viento"] = viento;
+        jsonActual["amanecer"] = amanecer.substring(11); // Cortamos para dejar solo la hora HH:MM
+        jsonActual["atardecer"] = atardecer.substring(11);
+        
+        String r_actual;
+        serializeJson(jsonActual, r_actual);
+        client.publish(topic_clima_actual, r_actual.c_str());
+
+        // 3. Datos del Calendario Semanal (Probabilidad de lluvia y códigos de los próximos 7 días)
+        StaticJsonDocument<1024> jsonSemana;
+        JsonArray dias_lluvia = jsonSemana.createNestedArray("lluvia_prob");
+        JsonArray dias_codigo = jsonSemana.createNestedArray("codigo_clima");
+        
+        for(int i=0; i<7; i++) {
+          dias_lluvia.add(doc["daily"]["precipitation_probability_max"][i]);
+          dias_codigo.add(doc["daily"]["weathercode"][i]);
+        }
+
+        String r_semana;
+        serializeJson(jsonSemana, r_semana);
+        // Enviamos el paquete del calendario de 7 días en un solo envío MQTT
+        client.publish(topic_calendario, r_semana.c_str());
+
+        Serial.println("¡Datos transmitidos con éxito!");
+      }
+      http.end();
+    }
+  }
+}
