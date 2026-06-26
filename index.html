@@ -3,185 +3,256 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Estación Meteorológica Inteligente</title>
+    <title>MeteoPro - Estación Meteorológica</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+    <style>
+        body {
+            background: linear-gradient(145deg, #1e293b, #0f172a);
+        }
+        /* Efecto de las tarjetas de la imagen (Glassmorphism oscuro y suave) */
+        .meteo-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.05), 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        /* Contenedor del arco solar */
+        .sun-arc-container {
+            position: relative;
+            width: 100px;
+            height: 50px;
+            overflow: hidden;
+        }
+        .sun-arc {
+            width: 100px;
+            height: 100px;
+            border: 3px dashed rgba(234, 179, 8, 0.3);
+            border-bottom: none;
+            border-radius: 100px 100px 0 0;
+        }
+    </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased">
+<body class="text-slate-200 min-h-screen font-sans flex justify-center items-center p-0 sm:p-4">
 
-    <div class="max-w-md mx-auto p-4 sm:p-6 space-y-6">
+    <div class="w-full max-w-md bg-slate-900/90 sm:rounded-[40px] shadow-2xl min-h-screen sm:min-h-[850px] p-6 flex flex-col justify-between border border-slate-800/80 relative overflow-hidden">
         
-        <header class="flex justify-between items-center bg-slate-800/50 backdrop-blur-md p-4 rounded-2xl border border-slate-700/50">
-            <div>
-                <h1 class="text-xl font-bold tracking-tight text-white">Central IoT</h1>
-                <p class="text-xs text-slate-400" id="update-time">Esperando datos...</p>
-            </div>
-            <span id="status-badge" class="px-3 py-1 text-xs font-medium rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1.5">
-                <span class="h-2 w-2 rounded-full bg-amber-400 animate-pulse"></span>
-                Conectando
-            </span>
-        </header>
+        <div class="space-y-6">
+            <header class="flex justify-between items-start">
+                <div>
+                    <h1 class="text-2xl font-bold tracking-tight text-white flex items-center gap-1">
+                        Meteo<span class="text-slate-400 font-normal">Pro</span>
+                        <span id="status-dot" class="h-2 w-2 rounded-full bg-amber-500 animate-pulse ml-1"></span>
+                    </h1>
+                    <p class="text-xs text-slate-400 mt-0.5"><i class="fa-solid fa-location-dot text-indigo-400 mr-1"></i> Cañuelas</p>
+                </div>
+                <div class="text-right text-xs text-slate-400">
+                    <p id="fecha-actual">21.6.2021</p>
+                    <p id="hora-actual" class="font-semibold text-slate-300">13:15</p>
+                </div>
+            </header>
 
-        <main class="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl p-6 text-center shadow-xl shadow-indigo-950/40 relative overflow-hidden">
-            <div class="absolute top-0 right-0 p-4 opacity-10 text-9xl">
-                <i class="fa-solid fa-cloud-sun-rain"></i>
-            </div>
-            <p class="text-sm font-semibold tracking-wider uppercase text-blue-100">Condiciones Actuales</p>
-            <h2 class="text-7xl font-extrabold my-4 tracking-tighter text-white" id="temp">--°</h2>
-            
-            <div class="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-white/10 text-sm">
-                <div class="flex items-center justify-center gap-3 bg-white/5 p-3 rounded-xl">
-                    <i class="fa-solid fa-wind text-blue-200 text-lg"></i>
-                    <div class="text-left">
-                        <p class="text-xs text-blue-200">Viento</p>
-                        <p class="font-semibold text-white" id="viento">-- km/h</p>
+            <section class="space-y-2">
+                <h3 class="text-xs font-bold tracking-wider uppercase text-slate-400 px-1">Estado Actual</h3>
+                <div class="meteo-card rounded-3xl p-5 flex flex-col justify-between relative">
+                    
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-2">
+                            <i id="main-icon" class="fa-solid fa-cloud-sun text-5xl text-amber-400"></i>
+                        </div>
+                        <div class="text-right">
+                            <h2 class="text-5xl font-light tracking-tight text-white inline-block" id="temp">22.8</h2>
+                            <span class="text-xl font-light text-slate-400 align-top ml-1">°C</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2 mt-6 pt-4 border-t border-slate-800 text-left">
+                        <div>
+                            <p class="text-[10px] text-slate-400 uppercase">Sensación</p>
+                            <p class="text-xs font-semibold text-white mt-0.5" id="sensacion">23.5 °C</p>
+                        </div>
+                        <div>
+                            <p class="text-[10px] text-slate-400 uppercase">Humedad</p>
+                            <p class="text-xs font-semibold text-white mt-0.5" id="humedad">65%</p>
+                        </div>
+                        <div>
+                            <p class="text-[10px] text-slate-400 uppercase">Viento</p>
+                            <p class="text-xs font-semibold text-white mt-0.5 flex items-center gap-1" id="viento">
+                                14 km/h <span class="text-[10px] text-indigo-400 font-bold" id="viento-dir">NO</span>
+                            </p>
+                        </div>
                     </div>
                 </div>
-                <div class="flex items-center justify-center gap-3 bg-white/5 p-3 rounded-xl">
-                    <i class="fa-solid fa-cloud-showers-heavy text-blue-200 text-lg"></i>
-                    <div class="text-left">
-                        <p class="text-xs text-blue-200">Lluvia Hoy</p>
-                        <p class="font-semibold text-white" id="lluvia-hoy">-- mm</p>
+            </section>
+
+            <section class="space-y-2">
+                <h3 class="text-xs font-bold tracking-wider uppercase text-slate-400 px-1">Sol y Alertas</h3>
+                <div class="grid grid-cols-12 gap-3">
+                    
+                    <div class="col-span-7 meteo-card rounded-2xl p-4 flex items-center justify-between">
+                        <div class="space-y-3 text-xs">
+                            <div class="flex items-center gap-2">
+                                <i class="fa-solid fa-cloud-sun text-amber-400"></i>
+                                <div>
+                                    <p class="text-[10px] text-slate-400">Amanecer</p>
+                                    <p class="font-medium text-white" id="amanecer">06:48</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <i class="fa-solid fa-cloud-moon text-indigo-400"></i>
+                                <div>
+                                    <p class="text-[10px] text-slate-400">Atardecer</p>
+                                    <p class="font-medium text-white" id="atardecer">18:35</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="sun-arc-container mt-1">
+                            <div class="sun-arc"></div>
+                            <i class="fa-solid fa-sun text-amber-400 text-xs absolute top-[20px] left-[42px]"></i>
+                        </div>
                     </div>
-                </div>
-            </div>
-        </main>
 
-        <section class="grid grid-cols-2 gap-4">
-            <div class="bg-slate-800/40 border border-slate-700/50 p-4 rounded-2xl flex items-center gap-3">
-                <div class="p-3 bg-amber-500/10 rounded-xl text-amber-400">
-                    <i class="fa-solid fa-sun text-xl"></i>
-                </div>
-                <div>
-                    <p class="text-xs text-slate-400">Amanecer</p>
-                    <p class="font-semibold text-sm" id="amanecer">--:--</p>
-                </div>
-            </div>
-            <div class="bg-slate-800/40 border border-slate-700/50 p-4 rounded-2xl flex items-center gap-3">
-                <div class="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
-                    <i class="fa-solid fa-moon text-xl"></i>
-                </div>
-                <div>
-                    <p class="text-xs text-slate-400">Atardecer</p>
-                    <p class="font-semibold text-sm" id="atardecer">--:--</p>
-                </div>
-            </div>
-        </section>
+                    <div id="alert-card" class="col-span-5 bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3 flex flex-col justify-center space-y-1">
+                        <div class="flex items-center gap-1.5 text-amber-400 font-bold text-[10px] uppercase">
+                            <i class="fa-solid fa-circle-exclamation text-xs"></i> Alerta
+                        </div>
+                        <p id="alert-text" class="text-[10px] leading-tight text-slate-300">Estable sin riesgos severos reportados.</p>
+                    </div>
 
-        <section id="alert-box" class="hidden bg-red-500/10 border border-red-500/20 p-4 rounded-2xl flex items-start gap-3">
-            <i class="fa-solid fa-triangle-exclamation text-red-400 text-xl mt-0.5"></i>
-            <div>
-                <h4 class="font-semibold text-red-400 text-sm">Alerta Meteorológica</h4>
-                <p class="text-xs text-slate-300 mt-1" id="alert-text">Alta probabilidad de tormentas fuertes o vientos severos en las próximas horas.</p>
-            </div>
-        </section>
+                </div>
+            </section>
 
-        <section class="space-y-3">
-            <h3 class="text-sm font-bold tracking-wider uppercase text-slate-400 px-1">Pronóstico Semanal</h3>
-            <div class="space-y-2.5" id="calendario">
-                <div class="animate-pulse bg-slate-800/20 h-16 rounded-xl"></div>
-                <div class="animate-pulse bg-slate-800/20 h-16 rounded-xl"></div>
-                <div class="animate-pulse bg-slate-800/20 h-16 rounded-xl"></div>
-            </div>
-        </section>
+            <section class="space-y-2">
+                <h3 class="text-xs font-bold tracking-wider uppercase text-slate-400 px-1">Calendario Semanal / Pronóstico de Riego</h3>
+                
+                <div class="grid grid-cols-5 gap-2" id="calendario-contenedor">
+                    <div class="animate-pulse bg-slate-800/40 h-32 rounded-2xl"></div>
+                </div>
+            </section>
+        </div>
+
+        <nav class="meteo-card rounded-2xl mt-6 p-3 flex justify-around items-center text-slate-400">
+            <button class="text-amber-400 text-lg"><i class="fa-solid fa-house"></i></button>
+            <button class="hover:text-white transition text-lg"><i class="fa-solid fa-chart-simple"></i></button>
+            <button class="hover:text-white transition text-lg"><i class="fa-solid fa-bell"></i></button>
+            <button class="hover:text-white transition text-lg"><i class="fa-solid fa-gear"></i></button>
+        </nav>
 
     </div>
 
     <script>
-        // CONFIGURACIÓN DE TU BROKER (Reemplaza con tus datos reales)
+        // CONFIGURÁ ACÁ TUS CREDENCIALES DE HIVEMQ CLOUD
         const broker = 'wss://tu_broker.hivemq.cloud:8884/mqtt'; 
         const options = {
             username: 'tu_usuario',
             password: 'tu_password',
-            clientId: 'web_pro_' + Math.random().toString(16).substr(2, 8)
+            clientId: 'meteo_pro_v3_' + Math.random().toString(16).substr(2, 8)
         };
 
         const client = mqtt.connect(broker, options);
-        const badge = document.getElementById('status-badge');
+        const statusDot = document.getElementById('status-dot');
 
         client.on('connect', () => {
-            badge.className = "px-3 py-1 text-xs font-medium rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5";
-            badge.innerHTML = '<span class="h-2 w-2 rounded-full bg-emerald-400"></span> En línea';
+            statusDot.className = "h-2 w-2 rounded-full bg-emerald-400 ml-1"; // Conectado (Verde)
             client.subscribe('estacion/clima');
         });
 
         client.on('close', () => {
-            badge.className = "px-3 py-1 text-xs font-medium rounded-full bg-red-500/10 text-red-400 border border-red-500/20 flex items-center gap-1.5";
-            badge.innerHTML = '<span class="h-2 w-2 rounded-full bg-red-400"></span> Desconectado';
+            statusDot.className = "h-2 w-2 rounded-full bg-rose-500 ml-1 animate-pulse"; // Desconectado (Rojo)
         });
 
         client.on('message', (topic, message) => {
             try {
                 const data = JSON.parse(message.toString());
-                actualizarUI(data);
-            } catch (e) {
-                console.error("Error parseando el JSON recibido:", e);
-            }
+                actualizarInterfazCompleta(data);
+            } catch (e) { console.error("Error procesando JSON de estación:", e); }
         });
 
-        function actualizarUI(data) {
-            // Actualizar hora de la última lectura
-            const ahora = new Date();
-            document.getElementById('update-time').innerText = `Act: ${ahora.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+        // Conversor de grados a siglas cardinales
+        function getWindDirection(deg) {
+            const index = Math.round(((deg %= 360) < 0 ? deg + 360 : deg) / 45) % 8;
+            return ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'][index];
+        }
 
-            // Datos actuales
-            document.getElementById('temp').innerText = `${Math.round(data.current.temperature_2m)}°C`;
-            document.getElementById('viento').innerText = `${data.current.wind_speed_10m}`;
-            document.getElementById('lluvia-hoy').innerText = `${data.daily.rain_sum[0]} mm`;
-            
-            // Horarios Sol
+        function actualizarInterfazCompleta(data) {
+            // Actualizar Fecha y Hora del reporte
+            const ahora = new Date();
+            document.getElementById('fecha-actual').innerText = `${ahora.getDate()}.${ahora.getMonth()+1}.${ahora.getFullYear()}`;
+            document.getElementById('hora-actual').innerText = ahora.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+            // Panel Actual
+            document.getElementById('temp').innerText = data.current.temperature_2m.toFixed(1);
+            document.getElementById('sensacion').innerText = `${(data.current.temperature_2m + 0.7).toFixed(1)} °C`; // Estimación de sensación
+            document.getElementById('humedad').innerText = `${data.current.relative_humidity_2m || 65}%`;
+            document.getElementById('viento').innerHTML = `${Math.round(data.current.wind_speed_10m)} km/h <span class="text-[10px] text-indigo-400 font-bold" id="viento-dir">${getWindDirection(data.current.wind_direction_10m)}</span>`;
+
+            // Soles
             document.getElementById('amanecer').innerText = data.daily.sunrise[0].split('T')[1];
             document.getElementById('atardecer').innerText = data.daily.sunset[0].split('T')[1];
 
-            // Gestión Inteligente de Alertas (Ejemplo basado en viento o probabilidad extrema de lluvia)
-            const alertBox = document.getElementById('alert-box');
-            if (data.current.wind_speed_10m > 40 || data.daily.precipitation_probability_max[0] > 85) {
-                alertBox.classList.remove('hidden');
-                if(data.current.wind_speed_10m > 40) {
-                    document.getElementById('alert-text').innerText = "Alerta por vientos intensos detectados por el sistema.";
-                }
+            // Gestión Dinámica de Alertas en Base al Clima
+            const alertCard = document.getElementById('alert-card');
+            const alertText = document.getElementById('alert-text');
+            
+            if(data.current.wind_speed_10m > 25) {
+                alertCard.className = "col-span-5 bg-rose-500/10 border border-rose-500/20 rounded-2xl p-3 flex flex-col justify-center space-y-1 text-rose-400";
+                alertText.innerText = "ALERTA: Vientos moderados / fuertes en la zona.";
+            } else if(data.daily.precipitation_probability_max[0] > 60) {
+                alertCard.className = "col-span-5 bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3 flex flex-col justify-center space-y-1 text-amber-400";
+                alertText.innerText = "ALERTA: Probabilidad de tormentas esta tarde.";
             } else {
-                alertBox.classList.add('hidden');
+                alertCard.className = "col-span-5 bg-slate-800/40 border border-slate-700/30 rounded-2xl p-3 flex flex-col justify-center space-y-1 text-slate-400";
+                alertText.innerText = "Condiciones normales sin alertas activas.";
             }
 
-            // Renderizar Calendario Semanal
-            const calendarioDiv = document.getElementById('calendario');
-            calendarioDiv.innerHTML = ''; 
+            // Renderizar los 5 Días del Calendario / Riego de la Imagen
+            const contenedorSemana = document.getElementById('calendario-contenedor');
+            contenedorSemana.innerHTML = ''; // Limpiar preexistentes
 
-            for(let i = 0; i < data.daily.time.length; i++) {
+            for(let i = 0; i < 5; i++) {
                 const fecha = new Date(data.daily.time[i] + 'T00:00:00');
-                const opciones = { weekday: 'long', day: 'numeric', month: 'short' };
-                let diaNombre = fecha.toLocaleDateString('es-ES', opciones);
-                // Capitalizar primera letra del día
-                diaNombre = diaNombre.charAt(0).toUpperCase() + diaNombre.slice(1);
+                const diasSemana = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
+                const nombreDia = diasSemana[fecha.getDay()];
+                const numeroDia = fecha.getDate();
 
-                const probLluvia = data.daily.precipitation_probability_max[i];
+                const probRain = data.daily.precipitation_probability_max[i];
                 
-                // Determinar icono del clima según probabilidad de lluvia
-                let iconoClima = 'fa-sun text-amber-400';
-                if(probLluvia > 25 && probLluvia <= 60) iconoClima = 'fa-cloud-sun text-slate-400';
-                if(probLluvia > 60) iconoClima = 'fa-cloud-showers-heavy text-blue-400';
+                // Determinar regla de riego e icono estético
+                let riegoTexto = "Óptimo";
+                let riegoColorClass = "bg-emerald-500";
+                let iconClass = "fa-sun text-amber-400";
 
-                const htmlDia = `
-                    <div class="flex items-center justify-between bg-slate-800/30 border border-slate-700/30 p-3.5 rounded-xl hover:bg-slate-800/50 transition">
-                        <div class="flex items-center gap-3">
-                            <div class="w-8 text-center text-lg">
-                                <i class="fa-solid ${iconoClima}"></i>
-                            </div>
-                            <div>
-                                <p class="text-sm font-semibold text-white">${diaNombre}</p>
-                                <p class="text-xs text-slate-400">Acumulado: ${data.daily.rain_sum[i]} mm</p>
-                            </div>
+                if (probRain > 20 && probRain <= 50) {
+                    riegoTexto = "Evitar";
+                    riegoColorClass = "bg-amber-500";
+                    iconClass = "fa-cloud-sun text-slate-400";
+                } else if (probRain > 50) {
+                    riegoTexto = "Evitar";
+                    riegoColorClass = "bg-rose-500";
+                    iconClass = "fa-cloud-showers-heavy text-sky-400";
+                }
+
+                // Generar tarjeta vertical exacta a la foto
+                contenedorSemana.innerHTML += `
+                    <div class="meteo-card rounded-2xl p-2.5 flex flex-col items-center justify-between text-center border ${i === 2 ? 'border-amber-500/60 ring-1 ring-amber-500/20' : 'border-transparent'}">
+                        <div>
+                            <p class="text-[10px] font-bold text-slate-400 tracking-wide">${nombreDia} <span class="text-[9px] font-normal opacity-60">${numeroDia}</span></p>
+                            <i class="fa-solid ${iconClass} text-lg my-2.5 block"></i>
+                            <p class="text-[9px] text-sky-400 font-medium flex items-center justify-center gap-0.5">
+                                <i class="fa-solid fa-droplet text-[8px]"></i> ${probRain}%
+                            </p>
                         </div>
-                        <div class="text-right">
-                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/10">
-                                <i class="fa-solid fa-droplet text-[10px]"></i> ${probLluvia}%
-                            </span>
+                        
+                        <div class="w-full mt-3">
+                            <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                                <div class="${riegoColorClass} h-full" style="width: 70%"></div>
+                            </div>
+                            <p class="text-[7px] uppercase tracking-tighter text-slate-400 mt-1 font-bold">Riego: ${riegoTexto}</p>
                         </div>
                     </div>
                 `;
-                calendarioDiv.innerHTML += htmlDia;
             }
         }
     </script>
