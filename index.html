@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MeteoPro Profesional</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+    <style>
+        :root { --bg: #121212; --card-bg: #1e1e1e; --accent: #00adb5; --gold: #ffde7d; --text: #e0e0e0; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); text-align: center; margin: 0; padding: 20px; }
+        h1 { color: var(--accent); font-size: 24px; margin-bottom: 20px; }
+        
+        .card { background: var(--card-bg); border-radius: 20px; padding: 25px; margin-bottom: 20px; box-shadow: 0 8px 16px rgba(0,0,0,0.4); }
+        .current-temp { font-size: 64px; font-weight: bold; color: var(--gold); margin: 10px 0; }
+        .sub-data { font-size: 16px; opacity: 0.8; display: flex; justify-content: center; gap: 15px; }
+
+        .sun-card { display: flex; justify-content: space-around; align-items: center; }
+        .sun-item { font-size: 14px; }
+        .alert-box { background: rgba(255, 222, 125, 0.1); border: 1px solid var(--gold); border-radius: 12px; padding: 15px; font-size: 14px; color: var(--gold); margin-top: 15px; }
+
+        .week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-top: 10px; }
+        .day-card { background: #2a2a2a; border-radius: 12px; padding: 15px 5px; font-size: 12px; }
+        .day-card.active { border: 2px solid var(--gold); background: #333; }
+        .weather-icon { font-size: 24px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+
+    <h1>MeteoPro Cañuelas</h1>
+
+    <div class="card">
+        <div>ESTADO ACTUAL</div>
+        <div id="temp" class="current-temp">--°C</div>
+        <div class="sub-data">
+            <span>Sensación: --°C</span>
+            <span>Humedad: --%</span>
+            <span>Viento: <span id="viento">--</span> km/h</span>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="sun-card">
+            <div class="sun-item">🌅 Amanecer<br><span id="amanecer" style="color:var(--gold); font-weight:bold;">--</span></div>
+            <div class="sun-item">🌇 Atardecer<br><span id="atardecer" style="color:var(--gold); font-weight:bold;">--</span></div>
+        </div>
+        <div class="alert-box">
+            ⚠️ <strong>ALERTA:</strong> Probabilidad de tormentas moderadas (Cód. 802).
+        </div>
+    </div>
+
+    <h2>📅 Pronóstico Semanal</h2>
+    <div class="week-grid" id="calendario">
+        </div>
+
+    <script>
+        // CONFIGURACIÓN ADAFRUIT IO
+        const UNAME = "TU_USUARIO";
+        const AIO_KEY = "TU_AIO_KEY";
+
+        const client = mqtt.connect(`wss://io.adafruit.com:443`, { username: UNAME, password: AIO_KEY });
+
+        client.on('connect', () => {
+            console.log("Conectado");
+            client.subscribe(`${UNAME}/feeds/clima-actual`);
+            client.subscribe(`${UNAME}/feeds/calendario-semanal`);
+        });
+
+        client.on('message', (topic, message) => {
+            const data = JSON.parse(message.toString());
+            
+            if(topic.endsWith('clima-actual')) {
+                document.getElementById('temp').innerText = data.temp + " °C";
+                document.getElementById('viento').innerText = data.viento;
+                document.getElementById('amanecer').innerText = data.amanecer;
+                document.getElementById('atardecer').innerText = data.atardecer;
+            }
+
+            if(topic.endsWith('calendario-semanal')) {
+                const contenedor = document.getElementById('calendario');
+                contenedor.innerHTML = "";
+                const diasSemana = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
+                const hoy = new Date().getDay();
+
+                for(let i=0; i<7; i++) {
+                    const diaNombre = diasSemana[(hoy + i) % 7];
+                    const probLluvia = data.lluvia_prob[i];
+                    const codigo = data.codigo_clima[i];
+
+                    let icono = "☀️"; // Simplificado
+                    if(codigo > 3) icono = "🌧️";
+                    else if(codigo > 0) icono = "⛅";
+
+                    // Destacar el día de mañana (JUE en el ejemplo)
+                    const claseActive = (i === 1) ? "active" : "";
+
+                    contenedor.innerHTML += `
+                        <div class="day-card ${claseActive}">
+                            <strong>${diaNombre}</strong><br>
+                            <div class="weather-icon">${icono}</div>
+                            💧${probLluvia}%
+                        </div>
+                    `;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
