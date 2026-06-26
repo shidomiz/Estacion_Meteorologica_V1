@@ -1,127 +1,189 @@
-#include <WiFi.h>
-#include <DNSServer.h>
-#include <WebServer.h>
-#include <WiFiManager.h>          
-#include <HTTPClient.h>
-#include <ArduinoJson.h>
-#include <PubSubClient.h>         
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estación Meteorológica Inteligente</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased">
 
-// --- CONFIGURACIÓN COORDENADAS (Se pueden cambiar en el AP) ---
-char latitud[10] = "-34.61";
-char longitud[10] = "-58.38";
-
-// --- CONFIGURACIÓN MQTT (Adafruit IO) ---
-const char* mqtt_server = "io.adafruit.com"; 
-const int mqtt_port = 1883;
-const char* mqtt_user = "TU_USUARIO_ADAFRUIT";
-const char* mqtt_pass = "TU_AIO_KEY_ADAFRUIT";
-
-// Tópicos de Adafruit IO (Feeds)
-const char* topic_clima_actual = "TU_USUARIO_ADAFRUIT/feeds/clima-actual";
-const char* topic_calendario   = "TU_USUARIO_ADAFRUIT/feeds/calendario-semanal";
-
-WiFiClient espClient;
-PubSubClient client(espClient);
-
-unsigned long ultimoEnvio = 0;
-const long intervalo = 900000; // 15 minutos
-
-void setup() {
-  Serial.begin(115200);
-
-  WiFiManager wm;
-  WiFiManagerParameter custom_latitud("lat", "Latitud", latitud, 10);
-  WiFiManagerParameter custom_longitud("lon", "Longitud", longitud, 10);
-  wm.addParameter(&custom_latitud);
-  wm.addParameter(&custom_longitud);
-
-  if (!wm.autoConnect("ESP32_Central_Meteo", "password123")) {
-    Serial.println("Fallo la conexión, reiniciando...");
-    delay(3000);
-    ESP.restart();
-  }
-
-  strcpy(latitud, custom_latitud.getValue());
-  strcpy(longitud, custom_longitud.getValue());
-  
-  client.setServer(mqtt_server, mqtt_port);
-}
-
-void reconectarMQTT() {
-  while (!client.connected()) {
-    Serial.print("Conectando a Adafruit IO...");
-    String clientId = "ESP32Client-" + String(random(0xffff), HEX);
-    if (client.connect(clientId.c_str(), mqtt_user, mqtt_pass)) {
-      Serial.println("¡Conectado!");
-    } else {
-      delay(5000);
-    }
-  }
-}
-
-void loop() {
-  if (!client.connected()) reconectarMQTT();
-  client.loop();
-
-  unsigned long ahora = millis();
-  if (ahora - ultimoEnvio >= intervalo || ultimoEnvio == 0) {
-    ultimoEnvio = ahora;
-
-    if (WiFi.status() == WL_CONNECTED) {
-      HTTPClient http;
-      
-      // URL Avanzada: Pide datos actuales + datos diarios (amanecer, atardecer, prob. lluvia, weathercode)
-      String url = "http://api.open-meteo.com/v1/forecast?latitude=" + String(latitud) + 
-                   "&longitude=" + String(longitud) + 
-                   "&current_weather=true&daily=sunrise,sunset,weathercode,precipitation_probability_max&timezone=auto";
-
-      http.begin(url);
-      int httpCode = http.GET();
-
-      if (httpCode > 0) {
-        String payload = http.getString();
+    <div class="max-w-md mx-auto p-4 sm:p-6 space-y-6">
         
-        // Asignamos 4KB de memoria, ideal para el ESP32
-        DynamicJsonDocument doc(4096); 
-        deserializeJson(doc, payload);
+        <header class="flex justify-between items-center bg-slate-800/50 backdrop-blur-md p-4 rounded-2xl border border-slate-700/50">
+            <div>
+                <h1 class="text-xl font-bold tracking-tight text-white">Central IoT</h1>
+                <p class="text-xs text-slate-400" id="update-time">Esperando datos...</p>
+            </div>
+            <span id="status-badge" class="px-3 py-1 text-xs font-medium rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1.5">
+                <span class="h-2 w-2 rounded-full bg-amber-400 animate-pulse"></span>
+                Conectando
+            </span>
+        </header>
 
-        // 1. Datos Actuales
-        float temp = doc["current_weather"]["temperature"];
-        float viento = doc["current_weather"]["windspeed"];
-        
-        // 2. Amanecer y Atardecer de hoy (Día 0)
-        String amanecer = doc["daily"]["sunrise"][0].as<String>();
-        String atardecer = doc["daily"]["sunset"][0].as<String>();
+        <main class="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl p-6 text-center shadow-xl shadow-indigo-950/40 relative overflow-hidden">
+            <div class="absolute top-0 right-0 p-4 opacity-10 text-9xl">
+                <i class="fa-solid fa-cloud-sun-rain"></i>
+            </div>
+            <p class="text-sm font-semibold tracking-wider uppercase text-blue-100">Condiciones Actuales</p>
+            <h2 class="text-7xl font-extrabold my-4 tracking-tighter text-white" id="temp">--°</h2>
+            
+            <div class="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-white/10 text-sm">
+                <div class="flex items-center justify-center gap-3 bg-white/5 p-3 rounded-xl">
+                    <i class="fa-solid fa-wind text-blue-200 text-lg"></i>
+                    <div class="text-left">
+                        <p class="text-xs text-blue-200">Viento</p>
+                        <p class="font-semibold text-white" id="viento">-- km/h</p>
+                    </div>
+                </div>
+                <div class="flex items-center justify-center gap-3 bg-white/5 p-3 rounded-xl">
+                    <i class="fa-solid fa-cloud-showers-heavy text-blue-200 text-lg"></i>
+                    <div class="text-left">
+                        <p class="text-xs text-blue-200">Lluvia Hoy</p>
+                        <p class="font-semibold text-white" id="lluvia-hoy">-- mm</p>
+                    </div>
+                </div>
+            </div>
+        </main>
 
-        // Creamos un JSON compacto para enviar el "Estado Actual" por MQTT
-        StaticJsonDocument<300> jsonActual;
-        jsonActual["temp"] = temp;
-        jsonActual["viento"] = viento;
-        jsonActual["amanecer"] = amanecer.substring(11); // Cortamos para dejar solo la hora HH:MM
-        jsonActual["atardecer"] = atardecer.substring(11);
-        
-        String r_actual;
-        serializeJson(jsonActual, r_actual);
-        client.publish(topic_clima_actual, r_actual.c_str());
+        <section class="grid grid-cols-2 gap-4">
+            <div class="bg-slate-800/40 border border-slate-700/50 p-4 rounded-2xl flex items-center gap-3">
+                <div class="p-3 bg-amber-500/10 rounded-xl text-amber-400">
+                    <i class="fa-solid fa-sun text-xl"></i>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-400">Amanecer</p>
+                    <p class="font-semibold text-sm" id="amanecer">--:--</p>
+                </div>
+            </div>
+            <div class="bg-slate-800/40 border border-slate-700/50 p-4 rounded-2xl flex items-center gap-3">
+                <div class="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
+                    <i class="fa-solid fa-moon text-xl"></i>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-400">Atardecer</p>
+                    <p class="font-semibold text-sm" id="atardecer">--:--</p>
+                </div>
+            </div>
+        </section>
 
-        // 3. Datos del Calendario Semanal (Probabilidad de lluvia y códigos de los próximos 7 días)
-        StaticJsonDocument<1024> jsonSemana;
-        JsonArray dias_lluvia = jsonSemana.createNestedArray("lluvia_prob");
-        JsonArray dias_codigo = jsonSemana.createNestedArray("codigo_clima");
-        
-        for(int i=0; i<7; i++) {
-          dias_lluvia.add(doc["daily"]["precipitation_probability_max"][i]);
-          dias_codigo.add(doc["daily"]["weathercode"][i]);
+        <section id="alert-box" class="hidden bg-red-500/10 border border-red-500/20 p-4 rounded-2xl flex items-start gap-3">
+            <i class="fa-solid fa-triangle-exclamation text-red-400 text-xl mt-0.5"></i>
+            <div>
+                <h4 class="font-semibold text-red-400 text-sm">Alerta Meteorológica</h4>
+                <p class="text-xs text-slate-300 mt-1" id="alert-text">Alta probabilidad de tormentas fuertes o vientos severos en las próximas horas.</p>
+            </div>
+        </section>
+
+        <section class="space-y-3">
+            <h3 class="text-sm font-bold tracking-wider uppercase text-slate-400 px-1">Pronóstico Semanal</h3>
+            <div class="space-y-2.5" id="calendario">
+                <div class="animate-pulse bg-slate-800/20 h-16 rounded-xl"></div>
+                <div class="animate-pulse bg-slate-800/20 h-16 rounded-xl"></div>
+                <div class="animate-pulse bg-slate-800/20 h-16 rounded-xl"></div>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        // CONFIGURACIÓN DE TU BROKER (Reemplaza con tus datos reales)
+        const broker = 'wss://tu_broker.hivemq.cloud:8884/mqtt'; 
+        const options = {
+            username: 'tu_usuario',
+            password: 'tu_password',
+            clientId: 'web_pro_' + Math.random().toString(16).substr(2, 8)
+        };
+
+        const client = mqtt.connect(broker, options);
+        const badge = document.getElementById('status-badge');
+
+        client.on('connect', () => {
+            badge.className = "px-3 py-1 text-xs font-medium rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5";
+            badge.innerHTML = '<span class="h-2 w-2 rounded-full bg-emerald-400"></span> En línea';
+            client.subscribe('estacion/clima');
+        });
+
+        client.on('close', () => {
+            badge.className = "px-3 py-1 text-xs font-medium rounded-full bg-red-500/10 text-red-400 border border-red-500/20 flex items-center gap-1.5";
+            badge.innerHTML = '<span class="h-2 w-2 rounded-full bg-red-400"></span> Desconectado';
+        });
+
+        client.on('message', (topic, message) => {
+            try {
+                const data = JSON.parse(message.toString());
+                actualizarUI(data);
+            } catch (e) {
+                console.error("Error parseando el JSON recibido:", e);
+            }
+        });
+
+        function actualizarUI(data) {
+            // Actualizar hora de la última lectura
+            const ahora = new Date();
+            document.getElementById('update-time').innerText = `Act: ${ahora.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+
+            // Datos actuales
+            document.getElementById('temp').innerText = `${Math.round(data.current.temperature_2m)}°C`;
+            document.getElementById('viento').innerText = `${data.current.wind_speed_10m}`;
+            document.getElementById('lluvia-hoy').innerText = `${data.daily.rain_sum[0]} mm`;
+            
+            // Horarios Sol
+            document.getElementById('amanecer').innerText = data.daily.sunrise[0].split('T')[1];
+            document.getElementById('atardecer').innerText = data.daily.sunset[0].split('T')[1];
+
+            // Gestión Inteligente de Alertas (Ejemplo basado en viento o probabilidad extrema de lluvia)
+            const alertBox = document.getElementById('alert-box');
+            if (data.current.wind_speed_10m > 40 || data.daily.precipitation_probability_max[0] > 85) {
+                alertBox.classList.remove('hidden');
+                if(data.current.wind_speed_10m > 40) {
+                    document.getElementById('alert-text').innerText = "Alerta por vientos intensos detectados por el sistema.";
+                }
+            } else {
+                alertBox.classList.add('hidden');
+            }
+
+            // Renderizar Calendario Semanal
+            const calendarioDiv = document.getElementById('calendario');
+            calendarioDiv.innerHTML = ''; 
+
+            for(let i = 0; i < data.daily.time.length; i++) {
+                const fecha = new Date(data.daily.time[i] + 'T00:00:00');
+                const opciones = { weekday: 'long', day: 'numeric', month: 'short' };
+                let diaNombre = fecha.toLocaleDateString('es-ES', opciones);
+                // Capitalizar primera letra del día
+                diaNombre = diaNombre.charAt(0).toUpperCase() + diaNombre.slice(1);
+
+                const probLluvia = data.daily.precipitation_probability_max[i];
+                
+                // Determinar icono del clima según probabilidad de lluvia
+                let iconoClima = 'fa-sun text-amber-400';
+                if(probLluvia > 25 && probLluvia <= 60) iconoClima = 'fa-cloud-sun text-slate-400';
+                if(probLluvia > 60) iconoClima = 'fa-cloud-showers-heavy text-blue-400';
+
+                const htmlDia = `
+                    <div class="flex items-center justify-between bg-slate-800/30 border border-slate-700/30 p-3.5 rounded-xl hover:bg-slate-800/50 transition">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 text-center text-lg">
+                                <i class="fa-solid ${iconoClima}"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-semibold text-white">${diaNombre}</p>
+                                <p class="text-xs text-slate-400">Acumulado: ${data.daily.rain_sum[i]} mm</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/10">
+                                <i class="fa-solid fa-droplet text-[10px]"></i> ${probLluvia}%
+                            </span>
+                        </div>
+                    </div>
+                `;
+                calendarioDiv.innerHTML += htmlDia;
+            }
         }
-
-        String r_semana;
-        serializeJson(jsonSemana, r_semana);
-        // Enviamos el paquete del calendario de 7 días en un solo envío MQTT
-        client.publish(topic_calendario, r_semana.c_str());
-
-        Serial.println("¡Datos transmitidos con éxito!");
-      }
-      http.end();
-    }
-  }
-}
+    </script>
+</body>
+</html>
